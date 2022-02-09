@@ -1,0 +1,688 @@
+---
+title: "Advanced Visualization in R - Final project - Global Terrorist"
+author: "Sang Luong"
+date: "1/21/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## I. Introduction 
+
+### 1. Data set
+
+Global Terrorism data set contains very much information on more than 180000 terrorist attacks around the world from 1970 to 2017. This data comes from The Global Terrorism Database (GTD).
+
+There are 135 columns including date, time, location, number of hostages, killed, wounded, type of weapon used, target of attacks, motive, if there was a ransom, the outcome, if there was a suicide attack, claims, and so on...
+
+Variables which are interesting for this project <br>            
+
+`iyear, imonth, iday:`the year, the number of the month, the numeric day of the month in which the incident occurred. <br>
+`extended:` 1 = "Yes" The duration of an incident extended more than 24 hours. 0 = "No" The duration of an incident extended less <br>
+`country_txt:` the country or location where the incident occurred. <br>
+`region_txt:`  the region in which the incident occurred. <br>
+`city:` Name of the city, village, or town in which the incident occurred <br>
+`success:` Success of a terrorist strike, = 1 if success, = 0 if it's not <br>
+`suicide:` 1 = "Yes" The incident was a suicide attack. 0 = "No" There is no indication that the incident was a suicide <br>
+`attacktype1_txt:`The general method of attack and broad class of tactics used. <br>
+`targtype1_txt:` The general type of target/victim (22 types of targets) <br>
+`natlty1_txt:` The nationality of the target that was attacked <br>
+`gname:` The name of the group that carried out the attack <br>
+`individual:` Wheter the attack is cattied out by individual (= 1) or not (= 0) <br>
+`nperps:` The total number of terrorists participating in the incident <br>
+`weaptype1_txt:` General type of weapon used in the incident (13 types of weapons) <br>
+`nkill:` The number of total confirmed fatalities for the incident <br>
+`nkillus:` The number of U.S. citizens who died as a result of the incident <br>
+`nwound:` The number of total confirmed wound for the incident <br>
+`nwoundus:` The number of U.S. citizens who are wounded as a result of the incident <br>
+`ransomamt:` The ransom note amount which required from attacks <br>
+Source: from Kaggle platform <br> https://www.kaggle.com/gpreda/global-terrorist-attacks/data
+
+### 2. Analysing context
+Terrorist attacks have become a serious source of risk affecting the security of the international community. <br>
+The purpose of this project will analyze the killings, wounded, , the target of attacks, the weapons used in each attack, looking as well to the development in time of the terrorist groups activity.<br>
+This project also analyze as well the perpetrators group and , the geographical region where the attacks occured, the location of escape of the perpetrators (the country or city they asked to go after the attack)
+
+```{r, include = FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(treemap)
+library(RColorBrewer)
+library(ggrepel)
+library(ggtext)
+library(glue)
+library(leaflet)
+library(ggalt)
+library(rnaturalearth)
+library(tm)
+library(wordcloud)
+library(wordcloud2)
+library(sf)
+library(gridExtra)
+library(cowplot)
+library(ggforce)
+library(GGally)
+library(Rmisc)
+library(grid)
+options("scipen"=100, "digits"=4)
+setwd("C:/Users/Admin/Desktop/Kaggle/globalterrorist")
+```
+
+```{r cars}
+terrorist <- read.csv('globalterrorist.csv', sep =',', dec = ',')
+names(terrorist)
+```
+
+### 3. Processing Data
+Many columns have NaN value and have no meaning in data so I need to remove them and just select 40 out of 135 variables for our project. <br>
+I also convert data type of variable nkill, nwound, ransomamt, ransompaid, latitude, longitude into numeric for later using. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data <- terrorist %>% dplyr::select(iyear,imonth,iday,country,country_txt,region,region_txt,city,latitude,longitude,summary,success,suicide,attacktype1,attacktype1_txt,targtype1,targtype1_txt,targsubtype1,targsubtype1_txt,gname,motive,claimmode,claimmode_txt,weaptype1,weaptype1_txt,weapdetail,nkill,nkillus,nwound,nwoundus,propextent,propextent_txt,propvalue,nhostkid,nhostkidus,ransomamt,ransompaid,ransomnote,hostkidoutcome,hostkidoutcome_txt)
+terrorist_data$nkill <- as.numeric(terrorist_data$nkill)
+terrorist_data$nwound <- as.numeric(terrorist_data$nwound)
+terrorist_data$ransomamt <- as.numeric(terrorist_data$ransomamt)
+terrorist_data$ransompaid <- as.numeric(terrorist_data$ransompaid)
+terrorist_data$latitude <- as.numeric(terrorist_data$latitude)
+terrorist_data$longitude <- as.numeric(terrorist_data$longitude)
+```
+
+## II. Overall trend in global terrorsit attack
+
+### 1. The number of events and killings per year
+
+In general, the number of terrorist attack increase from 1970 to 2017. This trend is slightly decreasing in period 1990-2000 but after that, there is a sharp rise from 2000 to 2017. <br>
+We also observe a masive increase in term of the danger of each attact when the number of killings in last 5 years is much more higer than previous years. <br>
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(!is.na(nkill)) %>% dplyr::group_by(iyear) %>% dplyr::summarise(count =n(),number_of_kills = sum(nkill))-> dfa_1
+ggplot(data = dfa_1, aes(x=iyear,y=count)) +
+  geom_point(aes( size = number_of_kills),color = "red") + geom_smooth(color ='red',fill="red", alpha = 0.2) + 
+  labs (x = 'Year', y ='Number of terrorist events', title = 'Terrorist events and killings by year') + 
+  geom_text_repel(data = dfa_1[(dfa_1$number_of_kills>10000),], aes(label = number_of_kills), hjust = 0, vjust = 0)+
+  ggplot2::annotate("rect", xmin = 1990, xmax = 2000, ymin = 0, ymax = 18000, alpha = .2, fill = "red")+
+  ggplot2::annotate("rect", xmin = 1970, xmax = 1990, ymin = 0, ymax = 18000, alpha = .2, fill = "green")+
+  ggplot2::annotate("rect", xmin = 2000, xmax = 2017, ymin = 0, ymax = 18000, alpha = .4, fill = "green")+
+  theme(plot.title = element_text(color = 'black', size = 16, face = 'bold', hjust = 0.5),
+        axis.title = element_text(face = 'bold', size = 12),
+        panel.grid.major = element_line(colour = "grey"),
+        panel.background = element_rect(fill = "white",colour = 'black' ,size = 0.5),
+        legend.position = "bottom") +
+  scale_y_continuous(name = "Number of terrorist events", limits = c(0,18000),breaks = seq(0,18000,by = 2000)) + 
+  scale_x_continuous(name = "Year", breaks = seq(1970,2020,by = 5)) +
+  scale_size(name = 'Number of killings', breaks = seq(0, 40000, by = 5000))
+```
+
+Treemap plot with the same information. <br> 
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+treemap(dfa_1, 
+        index=c("iyear"), 
+        vSize = "number_of_kills",
+        vColor  = "count",  
+        type = "value",
+        palette = "YlOrRd", 
+        mapping = c(0,8000,16000),
+        title="Killings in Global Terrorism", 
+        title.legend = "Number of events",
+        fontsize.title = 14 )
+```
+
+### 2. The number of events and killings per country
+
+From the graph below, we can observe few countries have a lot terrorist attack as well as many people killed in these events such as Iraq, Pakistan, Afghanistan, Colombia and India. <br>
+We also see some country with lower number of terrorist attack but the seriousness of these events is so high in term of human damage like Nigeria, Sri Lanka and Syria. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(!is.na(nkill)) %>% dplyr::group_by(country_txt) %>% dplyr::summarise(N = n(),number_of_kills = sum(nkill)) %>% arrange(desc(N)) %>% slice_max(N,n=50) -> dfa_2
+dfa_2$country_txt1 <- reorder(dfa_2$country_txt, dfa_2$N)
+ggplot(data = dfa_2, aes(group=1)) +
+  geom_bar(aes(x = country_txt1,y = N,fill = country_txt1), position = "stack",stat = 'identity') + 
+  geom_line(aes(x = country_txt1,y = number_of_kills/2), color = "red", size = 1, stat = "identity")+
+  scale_y_continuous(sec.axis = sec_axis(~.*2, name = "Number of kills (red line)")) +
+  labs(x = "Country", y = "Number of events (bar chart)", title = "Number of events per country")+
+  guides(fill = "none")+
+  theme(plot.title = element_text(color = 'black', size = 16, face = 'bold', hjust = 0.5), 
+        panel.grid.major = element_line(colour = "grey"),
+        panel.background = element_rect(fill = "white",colour = 'black' ,size = 0.5))+
+  coord_flip()
+```
+
+The same information with treemap plot. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+treemap(dfa_2, 
+        index=c("country_txt1"), 
+        vColor = "N",
+        vSize  = "number_of_kills",  
+        type = "value",
+        palette = "YlOrRd", 
+        mapping = c(0,12000,24000),
+        title="Killings in Global Terrorism", 
+        title.legend = "Number of events",
+        fontsize.title = 14 )
+```
+
+From another treemap plot with 2 indexes (country, year), we can see some countries have experienced recent massive increase, like Iraq, Afghanistan, Somalia or Syria while others have a long history, like India, Sri Lanka, Colombia or Peru <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter (!is.na(nkill),nwound != "") -> dfa_3
+dfa_3$nwound <- as.numeric(dfa_3$nwound)
+treemap(dfa_3, #Your data frame object
+        index=c("country_txt", "iyear"),  
+        type = "value",
+        vColor = "nwound", 
+        vSize = "nkill",
+        palette = "RdBu", 
+        title="Killings in Global terrorism  (Countries/Years) - size is proportional with the number of killings", 
+        title.legend = "Number of wounded",
+        fontsize.title = 10 )
+```
+
+### 3. The number of events and killings per region
+
+The graph below gives us informations that the large increase in the killings number for Middle East & North Africa as well as for South Asia and Sub-Saharan Africa in recent years. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(!is.na(nkill)) %>% dplyr::group_by(iyear,region_txt) %>% dplyr::summarise(number_of_skills = sum(nkill)) -> dfa_4
+ggplot(data = dfa_4, aes(x = iyear, y = number_of_skills, color = factor(region_txt))) +
+  geom_point() +
+  geom_line(size = 1) +
+  theme_minimal() +
+  guides(colour = guide_legend(override.aes = list(shape = 15, alpha = 1, size = 8), title = "Region", title.hjust = 0.5))+
+  labs(x = "year", y ="Number of kills", title= " Number of killings by year per region") 
+```
+
+The map depicts the number of human damage (killed + wounded) <br>
+There are 4 countries that have most people killed or wounded in these terrorist attacks: Iraq, Afghanistan, Pakistan and India. <br>
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+unique(terrorist_data$region_txt)
+terrorist_data %>% dplyr::filter(!is.na(nkill) & !is.na(nwound)) %>% dplyr::group_by(country_txt) %>% dplyr::summarise(Killings = sum(nkill), Wounded = sum(nwound)) -> country_attack
+country_attack$human_damage <- country_attack$Killings + country_attack$Wounded
+world <- ne_countries(scale = "medium", returnclass = "sf")
+world %>% dplyr::select(name_long, geometry) -> location 
+location$name_long[location$name_long =="Lao PDR"] <- "Laos"
+location$name_long[location$name_long =="Brunei Darussalam"] <- "Brunei"
+location$name_long[location$name_long =="Bosnia and Herzegovina"] <- "Bosnia-Herzegovina"
+location$name_long[location$name_long =="Timor-Leste"] <- "East Timor"
+location$name_long[location$name_long =="The Gambia"] <- "Gambia"
+location$name_long[location$name_long =="Côte d'Ivoire"] <- "Ivory Coast"
+location$name_long[location$name_long =="Republic of Korea"] <- "South Korea"
+location$name_long[location$name_long =="Dem. Rep. Korea"] <- "North Korea"
+location$name_long[location$name_long =="Republic of Congo"] <- "People's Republic of the Congo"
+location$name_long[location$name_long =="Russian Federation"] <- "Russia"
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_5 <- merge(location,country_attack,  by.x = c('name_long'),by.y = c('country_txt'),all.x = TRUE )
+dfa_5$human_damage[is.na(dfa_5$human_damage)] <- 0
+st_as_sf(dfa_5) -> dfa_5
+format_sep <- function(x) format(x, big.mark = ' ')
+ggplot(data = dfa_5) +
+  geom_sf(aes(fill = human_damage)) +
+  coord_sf(expand = FALSE) +
+  scale_fill_viridis_c(option = "plasma", trans = "sqrt", guide = guide_colorbar(barwidth = 30), name = NULL, labels = format_sep) +
+  theme(legend.position = 'bottom')
+```
+
+### 4. The number of events and killings per city
+
+The most dangerous cities in Middle East & North Africa region. <br>
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter (!is.na(nkill),nwound != "", region_txt == "Middle East & North Africa") %>% dplyr::group_by(city) %>% dplyr::summarise(nwound = sum(nwound), nkill = sum(nkill)) -> dfa_6
+dfa_6 %>% dplyr::filter(nwound < 40000) -> dfa_6 #remove data of Baghdad city
+ggplot(dfa_6, aes(x = nwound, y = nkill)) +
+  geom_point() +
+  labs(title = 'Human damage in Middle East & North Africa region',
+       x = 'Number of wounded' , y = 'Number of killings')  + 
+  geom_text_repel(data = dfa_6[dfa_6$nwound > 2000 & dfa_6$nkill > 1000, ], aes(label = city))+
+  geom_encircle(data = dfa_6[dfa_6$nwound > 2000 & dfa_6$nkill > 1000, ], color = "red", size =  2, expand = 0.1) +
+  scale_y_continuous(limits = c(0,8500),breaks = seq(0,8000,by = 1000)) + 
+  scale_x_continuous(limits = c(0,8500),breaks = seq(0,8000,by = 1000)) +
+  ggplot2::annotate("point", x = 8000, y = 8000, color = 'red', size = 7.5,shape = "*")+
+  ggplot2::annotate("text", x = 8000, y = 8000, label = 'atop(bold("Baghdad"),"nwound:56723, nkills:20174")', size = 3.5,parse = TRUE)+
+  theme_bw() 
+```
+
+The most dangerous cities in Sub-Saharan Africa region. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter (!is.na(nkill),nwound != "", region_txt == "Sub-Saharan Africa") %>% dplyr::group_by(country_txt,city) %>% dplyr::summarise(nwound = sum(nwound), nkill = sum(nkill)) -> dfa_7
+ggplot(dfa_7, aes(x = nwound, y = nkill)) +
+  geom_point() +
+  labs(title = 'Human damage in Sub-Saharan Africa region',
+       x = 'Number of wounded' , y = 'Number of killings')  + 
+  geom_text_repel(data = dfa_7[dfa_7$nwound > 600 | dfa_7$nkill > 600, ], aes(label = city,color = factor(country_txt)))+
+  geom_encircle(data = dfa_7[dfa_7$nwound > 1000 | dfa_7$nkill > 1000, ], color = "red", size =  2, expand = 0.00000) +
+  scale_y_continuous(limits = c(0,7000),breaks = seq(0,7000,by = 1000)) + 
+  scale_x_continuous(limits = c(0,7000),breaks = seq(0,7000,by = 1000)) +
+  guides(color = guide_legend(title = "Country",override.aes = list(shape = 10, alpha = 1, size = 6)))+
+  theme_bw() 
+```
+
+## III. Type of attack
+We can observe that Bombing/Explosion was always the most frequent type of attack, followed by Armed Assault. In recent years, the number of such events increased dramatically, accounting for the majority of the events in recent years. <br>
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::group_by(iyear, attacktype1_txt) %>% dplyr::summarise(Count = n()) -> dfa_8
+ggplot(data = dfa_8, aes(x = iyear, y = Count, color = factor(attacktype1_txt))) +
+  geom_point() +
+  geom_line(size = 1) +
+  theme_minimal() +
+  guides(colour = guide_legend(override.aes = list(shape = 15, alpha = 1, size = 8), title = "Type of attack", title.hjust = 0.5))+
+  labs(x = "year", y ="Number of events", title= " Number of events by type of attack") 
+```
+
+Interactive map show the the information about successfull terrorist attacks by Bombing/Explosion from 2000-2017. <br>
+We can see that, besides Middle East & North Africa, South Asia, South America region (especially in Colombia) has numerous terrorists are occurred by Bombing/ Explosion type. <br>
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(success == 1 & latitude != "" & longitude != "" & attacktype1_txt == "Bombing/Explosion" & iyear >= 2000)-> dfa_9
+dfa_9$latitude <- as.numeric(dfa_9$latitude)
+dfa_9$longitude <- as.numeric(dfa_9$longitude)
+leaflet(data = dfa_9) %>%
+  addTiles() %>%
+  addMarkers(lat=dfa_9$latitude, lng=dfa_9$longitude, clusterOptions = markerClusterOptions(),
+             popup= paste("<strong>Date: </strong>", dfa_9$iday,"/",dfa_9$imonth,"/", dfa_9$iyear,
+                          "<br><br><strong>Place: </strong>", dfa_9$city,"-",dfa_9$country_txt,
+                          "<br><strong>Killed: </strong>", dfa_9$nkill,
+                          "<br><strong>Wounded: </strong>", dfa_9$nwound,
+                          "<br><strong>Suicide attack(0-No/1-Yes): </strong>", dfa_9$suicide,
+                          "<br><strong>Target of attack: </strong>", dfa_9$targtype1_txt,
+                          "<br><strong>Ransom paid: </strong>", dfa_9$ransompaid,
+                          "<br><strong>Ransom note: </strong>", dfa_9$ransomnote,
+                          "<br><strong>Hostages/kidnapped: </strong>", dfa_9$nhostkid,
+                          "<br><strong>Hostages/kidnapped outcome: </strong>", dfa_9$hostkidoutcome_txt))
+
+```
+
+## IV. Type of Weapon
+
+The box plot of Human damage by weapon type illustrates that the most frequency weapon used in terrorist events is Explosives and followed by Firearms then Vehicle, Chemical. <br>
+We also observe the greatest damaged attacks in term of human killed and wounded is done by vehicle in event 11/9/2001 in United State with almost 9500 damaged people. The next one is the attack caused by Sarin compound with more than 5513 impacted inhabitants.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_10 <- terrorist_data %>% dplyr::filter(!is.na(nkill) & nwound != "") %>% dplyr::select(weaptype1_txt,nkill,nwound, weapdetail)
+dfa_10$human_damage <- dfa_10$nkill+dfa_10$nwound 
+dfa_10$weaptype1_txt[dfa_10$weaptype1_txt == "Vehicle (not to include vehicle-borne explosives, i.e., car or truck bombs)"] <- "Vehicle"
+dfa_10$weapdetail[64286] <- "The airplane attack into the North Tower of the World Trade Center Complex."
+dfa_10$weapdetail[64287] <- "The airplane attack into the South Tower of the World Trade Center Complex."
+ggplot(data = dfa_10, aes(y = human_damage, x = weaptype1_txt, color = weaptype1_txt)) +
+  geom_boxplot()+
+  theme(axis.text.x = element_text(angle = 90)) +
+  geom_text_repel(data = dfa_10[dfa_10$human_damage > 1250, ], aes(label = paste("(",human_damage,",",weapdetail,")")))+
+  labs(title = "Human damage by weapon type", x = "Weapon type", y = "Human damage") +
+  guides(colour = guide_legend(override.aes = list(shape = 8, alpha = 1, size = 2), title = "Weapon type", title.hjust = 0.5))
+
+```
+
+The largest number of people damage in terrorist events is more than 530000 and it is made by Explosive weapon, followed by Firearms weapon- 225473 and vehicle weapon - 50167
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_10 %>% dplyr::group_by(weaptype1_txt) %>% dplyr::summarise(human_damage = sum(human_damage)) -> dfa_11
+dfa_11$weaptype1_txt1 <- reorder(dfa_11$weaptype1_txt, desc(dfa_11$human_damage))
+ggplot(data = dfa_11, aes(y = human_damage, x = weaptype1_txt1, fill = weaptype1_txt)) +
+  geom_col()+
+  labs(x = 'Weapon Type', y = 'Human damaged', title = 'The number of human damaged caused by weapon type')+
+  theme(axis.text.x = element_text(angle = 90),plot.title = element_text(hjust = 0.5)) +
+  guides(fill = guide_legend(title = "Type of Weapon"))+
+  geom_text(aes(label = human_damage), vjust = -0.5, color = 'red', size = 3.5)
+```
+
+
+## V. Target of attacks
+
+Private Citizens & Property, Military and Police are the most regularly attacked by terrorist organizations corresponding with the greatest harmful and dead people.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(!is.na(nkill) &  nwound != "") %>% dplyr::group_by(targtype1_txt) %>% dplyr::summarise(N = n(),nkills = sum(nkill), nwound = sum(nwound) ) %>% arrange(desc(N))  -> dfa_12
+dfa_12$human_damage <- dfa_12$nkills + dfa_12$nwound
+dfa_12$targtype1_txt1 <- reorder(dfa_12$targtype1_txt, desc(dfa_12$N))
+ggplot(data = dfa_12, aes(group=1)) +
+  geom_bar(aes(x = targtype1_txt1,y = N,fill = targtype1_txt), position = "stack",stat = 'identity') + 
+  geom_line(aes(x = targtype1_txt1,y = human_damage/7), color = "red", size = 1, stat = "identity")+
+  scale_y_continuous(sec.axis = sec_axis(~.*7, name = "Human damaged (red line)")) +
+  labs(x = "Target", y = "Number of events (bar chart)", title = "Number of events & Human damaged by target attack")+
+  guides(fill = "none")+
+  theme(plot.title = element_text(color = 'black', size = 16, face = 'bold', hjust = 0.5), 
+        panel.grid.major = element_line(colour = "grey"),
+        panel.background = element_rect(fill = "white",colour = 'black' ,size = 0.5),
+        axis.text.x  = element_text(angle = 90))
+```
+
+As can be seen from line graph below, in the period before 2010, Police office is place witnessed the most terrorist attacks but after that, there is a swift change in the target of terrorists when military facilities and private citizen& Property become a prime target. <br> 
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::group_by(iyear, targtype1_txt) %>% dplyr::summarise(Count = n()) -> dfa_13
+ggplot(data = dfa_13, aes(x = iyear, y = Count, color = factor(targtype1_txt))) +
+  geom_point() +
+  geom_line(size = 1.1) +
+  theme(plot.title = element_text(color = 'black', size = 16, face = 'bold', hjust = 0.5),
+        axis.title = element_text(face = 'bold', size = 12),
+        panel.grid.major = element_line(colour = "grey"),
+        panel.background = element_rect(fill = "white",colour = 'black' ,size = 0.5),
+        legend.position = "bottom") +
+  guides(colour = guide_legend(override.aes = list(shape = 1, alpha = 1, size = 4), title = "Target of attack", title.hjust = 0.5))+
+  labs(x = "year", y ="Number of events", title= " Number of events by target of attack") 
+```
+
+## VI. Property damages
+
+There are 3 categories of Property damages: Catastrophic (likely >= $1 billion), Major (likely .= $1 million but < $1 billion) and Minor (< $1 million) and the number of events happen corresponding with each category are 6, 909, 43304 times.
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter (propextent_txt != "",  propextent_txt != "Unknown") -> dfa_14
+dfa_14$propvalue[dfa_14$propvalue == ""] <- 0
+dfa_14$propvalue <- as.numeric(dfa_14$propvalue)
+dfa_14%>% dplyr::group_by(propextent_txt) %>% dplyr::summarise(Count = n(), total_value = sum(propvalue)) -> dfa_15
+ggplot(data = dfa_15, aes(y = total_value, x = propextent_txt, fill = propextent_txt)) +
+  geom_col()+
+  labs(x = 'Property damages', y = 'Total value', title = 'Total value of property damages', subtitle = "(The number above each bar represents the frequency of property damages classification)")+
+  theme(plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),plot.subtitle = element_text(hjust = 0.5) ,legend.position = "bottom") +
+  guides(fill = guide_legend(title = "Property damages"))+
+  geom_text(aes(label = Count), vjust = -0.5, color = 'black', size = 4.5)+
+  scale_y_continuous(name = "Total value [Million of USD]",
+                     breaks = seq(0, 4000000000, by = 500000000), 
+                     labels = format(seq(0, 4000, by = 500), big.mark = " "))
+```
+
+Let show 6 events where properties are damaged catastrophically. <br> 
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(propextent_txt =="Catastrophic (likely >= $1 billion)") %>% dplyr::select(iyear, imonth, iday, country_txt,targtype1_txt,weaptype1_txt,propvalue ) -> dfa_16
+dfa_16$weaptype1_txt[dfa_16$weaptype1_txt == "Vehicle (not to include vehicle-borne explosives, i.e., car or truck bombs)"] <- "Vehicle"
+dfa_16
+```
+
+
+The interactive map of total property damage events with Major destroy category.  <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(latitude != "" & longitude != "" & propextent_txt == "Major (likely >= $1 million but < $1 billion)")-> dfa_17
+dfa_17$latitude <- as.numeric(dfa_17$latitude)
+dfa_17$longitude <- as.numeric(dfa_17$longitude)
+leaflet(data = dfa_17) %>%
+  addTiles() %>%
+  addMarkers(lat=dfa_17$latitude, lng=dfa_17$longitude, clusterOptions = markerClusterOptions(),
+             popup= paste("<strong>Date: </strong>", dfa_17$iday,"/",dfa_17$imonth,"/", dfa_17$iyear,
+                          "<br><br><strong>Place: </strong>", dfa_17$city,"-",dfa_17$country_txt,
+                          "<br><strong>Killed: </strong>", dfa_17$nkill,
+                          "<br><strong>Wounded: </strong>", dfa_17$nwound,
+                          "<br><strong>Weapon type: </strong>", dfa_17$weaptype1_txt,
+                          "<br><strong>Target of attack: </strong>", dfa_17$targtype1_txt,
+                          "<br><strong>Property damage value: </strong>", dfa_17$propvalue))
+```
+
+## VII. Motive analysis
+we will use "Wordcloud" library to show which words are the most frequent among the Motive text of these terrorsit attacks record. <br>
+In general, the top words that represents for the motive of global terrorist activities are Responsibility, violence, Islamic, police, suspected, Shiite, speculated.. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_18 <- terrorist_data %>% dplyr::filter(!is.na(motive) & motive !="" ) %>% dplyr::select(motive)
+specificWords <- c("unknown","motive", "attack","specific","however","sources", "may", "part", "targeted", "stated","noted","claimed", "incident", "carried", "government","larger")
+docs <- VCorpus(VectorSource(dfa_18$motive))
+docs <- tm_map(docs, removePunctuation)
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removeWords, stopwords("english"))
+docs <- tm_map(docs, stripWhitespace)
+docs <- tm_map(docs, content_transformer(removeWords),specificWords)
+
+dtm <- DocumentTermMatrix(docs)
+dtm <- removeSparseTerms(dtm, sparse = 0.995)
+matrix <- as.matrix(dtm)
+
+freq <- colSums(matrix)
+freq_ <- data.frame(name = c(names(freq)), freq = unname(freq))
+freq_ <- freq_[order(freq_$freq, decreasing = TRUE),]
+wordcloud2(data = freq_, size =0.7,shape = 'pentagon')
+```
+
+#### Motivation of terrorist groups in Middle East & North Africa region
+It can be clearly seen that, many words related to religious such as Shiite, sunni, islamic are mentioned most frequently besides other words: Iraq, violence, security, sectarian, responsibility...<br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_19 <- terrorist_data %>% dplyr::filter(!is.na(motive) & motive !="" & region_txt == "Middle East & North Africa" ) %>% dplyr::select(motive)
+docs1 <- VCorpus(VectorSource(dfa_19$motive))
+docs1 <- tm_map(docs1, removePunctuation)
+docs1 <- tm_map(docs1, removeNumbers)
+docs1 <- tm_map(docs1, content_transformer(tolower))
+docs1 <- tm_map(docs1, removeWords, stopwords("english"))
+docs1 <- tm_map(docs1, stripWhitespace)
+docs1 <- tm_map(docs1, content_transformer(removeWords),specificWords)
+
+dtm1 <- DocumentTermMatrix(docs1)
+matrix1 <- as.matrix(dtm1)
+
+freq1 <- colSums(matrix1)
+freq1_ <- data.frame(name = c(names(freq1)), freq = unname(freq1))
+freq1_ <- freq1_[order(freq1_$freq, decreasing = TRUE),]
+wordcloud(names(freq1), freq1, max.words=100,scale=c(3,0.25), rot.per=0.35,random.order=FALSE, colors = brewer.pal(6, "Dark2"))
+```
+
+#### Motivation of terrorist groups in Sub-Saharan Africa region
+Different from the terrorist enthusiasm in the Middle East & North Africa region, in Sub-Saharan Africa many words about terrorist organization/ militant groups like Asshabaab, Boko Haram are the most mentioned words in this area apart from some common words with group before such as violence, suspected, retaliation... <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_20 <- terrorist_data %>% dplyr::filter(!is.na(motive) & motive !="" & region_txt == "Sub-Saharan Africa" ) %>%  dplyr::select(motive)
+docs2 <- VCorpus(VectorSource(dfa_20$motive))
+docs2 <- tm_map(docs2, removePunctuation)
+docs2 <- tm_map(docs2, removeNumbers)
+docs2 <- tm_map(docs2, content_transformer(tolower))
+docs2 <- tm_map(docs2, removeWords, stopwords("english"))
+docs2 <- tm_map(docs2, stripWhitespace)
+docs2 <- tm_map(docs2, content_transformer(removeWords),specificWords)
+
+dtm2<- DocumentTermMatrix(docs2)
+matrix2 <- as.matrix(dtm2)
+
+freq2 <- colSums(matrix2)
+freq2_ <- data.frame(name = c(names(freq2)), freq = unname(freq2))
+freq2_ <- freq2_[order(freq2_$freq, decreasing = TRUE),]
+wordcloud(names(freq2), freq2, max.words=100,scale=c(3.5,0.25), rot.per=0.35,random.order=FALSE, colors = brewer.pal(6, "Dark2"))
+```
+
+#### Motivation of terrorist groups in South Asia region
+The most frequently words mentioned in this region are: police, violence, responsibility, Taliban, elections, party, maoist...
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_21 <- terrorist_data %>% dplyr::filter(!is.na(motive) & motive !="" & region_txt == "South Asia" ) %>% dplyr::select(motive)
+docs3 <- VCorpus(VectorSource(dfa_21$motive))
+docs3 <- tm_map(docs3, removePunctuation)
+docs3 <- tm_map(docs3, removeNumbers)
+docs3 <- tm_map(docs3, content_transformer(tolower))
+docs3 <- tm_map(docs3, removeWords, stopwords("english"))
+docs3 <- tm_map(docs3, stripWhitespace)
+docs3 <- tm_map(docs3, content_transformer(removeWords),specificWords)
+
+dtm3<- DocumentTermMatrix(docs3)
+matrix3 <- as.matrix(dtm3)
+
+freq3 <- colSums(matrix3)
+freq3_ <- data.frame(name = c(names(freq3)), freq = unname(freq3))
+freq3_ <- freq3_[order(freq3_$freq, decreasing = TRUE),]
+wordcloud(names(freq3), freq3, max.words=100,scale=c(3.5,0.25), rot.per=0.35,random.order=FALSE, colors = brewer.pal(6, "Dark2"))
+```
+
+## VIII. Ransom analysis
+### 1. Ransom note analysis
+Overall,for the content in ransom note from perpetrators, "release", "assailants", "hostage", "exchange" and "kidnapping" are the words that appear most often. <br>
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+dfa_22 <- terrorist_data %>% dplyr::filter(!is.na(ransomnote) & ransomnote !="" & ransomnote != 0) %>% dplyr::select(ransomnote)
+specificWords2 <- c("unknown","ransom", "demanded")
+docs4 <- VCorpus(VectorSource(dfa_22$ransomnote))
+docs4 <- tm_map(docs4, removePunctuation)
+docs4 <- tm_map(docs4, removeNumbers)
+docs4 <- tm_map(docs4, content_transformer(tolower))
+docs4 <- tm_map(docs4, removeWords, stopwords("english"))
+docs4 <- tm_map(docs4, stripWhitespace)
+docs4 <- tm_map(docs4, content_transformer(removeWords),specificWords2)
+
+dtm4<- DocumentTermMatrix(docs4)
+matrix4 <- as.matrix(dtm4)
+
+freq4 <- colSums(matrix4)
+freq4_ <- data.frame(name = c(names(freq4)), freq = unname(freq4))
+freq4_ <- freq4_[order(freq4_$freq, decreasing = TRUE),]
+wordcloud(names(freq4), freq4, max.words=100,scale=c(4.5,0.25), rot.per=0.35,random.order=FALSE, colors = brewer.pal(6, "Dark2"))
+```
+
+### 2. ransomamt and ransompaid by year
+The largest ransom amount demand by terrorist group happened in 1978 with more than 1 billion $. <br>
+We can witness a rapid decrease in ransom amount in recent years. <br>
+In general, the governments pays little or no ransom to terrorist organizations.<br>
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+dfa_23 <- terrorist_data %>% dplyr::filter(!is.na(ransomamt) & ransomamt !="" & !is.na(ransompaid) & ransompaid !=""  ) 
+dfa_23 %>% dplyr::group_by(iyear) %>% dplyr::summarise(ransomamt = sum(ransomamt), ransompaid = sum(ransompaid)) -> dfa_24
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = dfa_24, aes(x = iyear), group=1) +
+  geom_point(aes(y = ransomamt))+
+  geom_line(aes(y = ransomamt), color = "steelblue", size = 1.25) + 
+  geom_line(aes(y = ransompaid), color = "red", size = 1.25) +
+  theme_minimal() +
+  scale_x_continuous(breaks = seq(1970,2017,by =5),labels = format(seq(1970,2017,by=5)))+
+  scale_y_continuous(name = "Ransom amount [million of USD] (blue line)",breaks = seq(0,1200000000,by = 100000000), labels = format(seq(0,1200,by=100), big.mark = " "),
+                     sec.axis = sec_axis(~./1000000, name = 'Ransompaid [million of USD] (red line)',breaks = seq(0,1200,by = 100),labels = format(seq(0,1200,by=100), big.mark = " ")))+
+  labs(x = "Year", title = "Ransom demanded for terrorist attack per year") +
+  geom_text_repel(data = dfa_24[dfa_24$ransomamt > 200000000 , ], aes(label = ransomamt, y = ransomamt))
+```
+
+### 3. ransomamt and ransompaid by region
+The region has the largest ransom amount demanded from terrorist organization is Eastern Europe but the actually ransom paid from this region is less than 10%. <br>
+Middle East & North Africa and South Asia are two region which have large amount of ransom required as well as most ransom paid amount for perpetrators of terrorist activities. <br>
+Central Asia, East Asia and Australasia $ Oceania are regions having lowest ransom demanded. <br>
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(!is.na(ransomamt) & ransomamt !="" & !is.na(ransompaid) & ransompaid !=""  )  %>% dplyr::group_by(region_txt) %>% dplyr::summarise(ransomamt = sum(ransomamt), ransompaid = sum(ransompaid)) -> dfa_25
+dfa_25$region_txt1 <- reorder(dfa_25$region_txt, desc(dfa_25$ransomamt))
+dfa_25$region_txt2 <- reorder(dfa_25$region_txt, desc(dfa_25$ransompaid))
+
+ransom_amt <- ggplot(data = dfa_25, aes (x = region_txt1, y = ransomamt, fill = region_txt))+
+  geom_bar(stat = "identity") +
+  labs(x = "", y = "Ransom amount [million USD]")+
+  guides(fill = guide_legend(title = "Region"))+
+  theme(axis.text.x = element_text(angle=90)) +
+  scale_y_continuous(breaks = seq(0,1250000000, by = 100000000), labels = format(seq(0,1250,100)))
+ 
+ransom_paid <- ggplot(data = dfa_25, aes (x = region_txt2, y = ransompaid, fill = region_txt))+
+  geom_bar(stat = "identity") +
+  labs(x = "",y = "Ransom paid amount [million USD]")+
+  guides(fill = guide_legend(title = "Region", label.theme = element_text(size = 8,colour = "black", angle = 0)))+
+  theme(axis.text.x = element_text(angle=90), legend.position = "bottom") + 
+  scale_y_continuous(breaks = seq(0,300000000, by = 50000000), labels = format(seq(0,300,50)))
+
+legend <- get_legend(ransom_paid)
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+grid.arrange(arrangeGrob(ransom_amt + theme(legend.position = "none"), 
+                         ransom_paid + theme(legend.position = "none"), 
+                         ncol = 2),legend, nrow = 2,
+                         top = " The total ransom amount and ransom paid by region",
+                         heights = c(6, 1)) 
+```
+
+
+### 4. Map of ransompaid by country
+We can observe some country with highest ransom paid such as: Iraq, Argentina, Mexico. <br>
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+terrorist_data %>% select(country_txt, ransompaid) -> country_ransom
+country_ransom$ransompaid[is.na(country_ransom$ransompaid)] <- 0
+country_ransom$ransompaid[country_ransom$ransompaid<0] <- 0
+country_ransom%>% dplyr::group_by(country_txt) %>% dplyr::summarise( ransompaid = sum(ransompaid)) -> country_ransom
+country_ransom <- country_ransom[order(country_ransom$ransompaid, decreasing = TRUE),]
+dfa_26 <- merge(location,country_ransom, by.x = c('name_long'), by.y = c('country_txt'),all.x = TRUE)
+dfa_26$ransompaid[is.na(dfa_26$ransompaid)] <- 0
+st_as_sf(dfa_26) -> dfa_26
+format_sep <- function(x) format(x/1000000,big.mark = ' ')
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = dfa_26) +
+  geom_sf(aes(fill = ransompaid)) +
+  coord_sf(expand = FALSE) +
+  scale_fill_viridis_c(option = "plasma", trans = "sqrt", guide = guide_colorbar(barwidth = 30), name = "Ransom paid [Million $]", labels = format_sep) +
+  theme(legend.position = 'bottom', plot.title = element_text(hjust = 0.5, size =20))+ labs(title = "The map of ransom paid" )
+```
+
+## IX. Perpetrators group and claim modes
+### 1. Perpetrators group
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::select(iyear, gname, nkill) -> dfa_27
+dfa_27$nkill[is.na(dfa_27$nkill)] <- 0
+dfa_27 %>% dplyr::group_by(gname) %>% dplyr::summarise(total_kill = sum(nkill)) %>% dplyr::arrange(desc(total_kill))  -> dfa_28
+```
+Many inhabitants is killed in terrorist attacks in which no terrorist organizations are responsible. <br>
+Most deadly attacks belongs to ISIL, the following ones are Taliban, Boko Haram. <br>
+The total terrorist organization in global is: 3537
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+length(dfa_28$gname)
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+dfa_28%>% dplyr::top_n(20) -> dfa_28
+dfa_28$gname1 <- reorder(dfa_28$gname, dfa_28$total_kill)
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(dfa_28, aes(x = gname1, y = total_kill,fill = gname))+
+  geom_bar(stat = 'identity', color = 'black')+
+  coord_flip() + theme_bw() +
+  labs(title = 'The number of killed people by perpetrator groups', x = 'Group', y = 'Total kills') +
+  geom_text(aes(label = total_kill),color = 'black', size = 3, position = position_dodge(0.5), hjust = -0.1)+
+  theme(legend.position = "none")
+  
+```
+
+We also can  observe the variation of the terrorist events year by year. In the period from 1980 to before 2000, many terrorist attacks are dominated by Sining Path (SL) and Farabundo Marti National Liberation Front (FMLN). In recent years, we witness the rise of terrorist groups come from Middle East & North Africa such as Islamic State of Iraq and the Levant (ISIL), Taliban, Al-Shabaab, Boko Haram... <br>
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+dfa_27 %>% dplyr:: group_by(gname) %>% dplyr::summarise(Count = n()) %>%  dplyr::arrange(desc(Count)) %>% dplyr:: top_n(11) ->  dfa_29
+dfa_27 %>% dplyr:: filter(gname %in% c(dfa_29$gname)) %>% dplyr:: group_by(iyear,gname) %>% 
+  dplyr:: summarise(Count = n()) %>% dplyr::filter(gname != 'Unknown')-> dfa_30
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(data = dfa_30, aes(x = iyear, y = Count, color = factor(gname))) +
+  geom_point() +
+  geom_line(size = 1) +
+  theme(plot.title = element_text(color = 'black', size = 16, face = 'bold', hjust = 0.5),
+        axis.title = element_text(face = 'bold', size = 12),
+        panel.grid.major = element_line(colour = "grey"),
+        panel.background = element_rect(fill = "white",colour = 'black' ,size = 0.5),
+        legend.position = "bottom") +
+  guides(colour = guide_legend(override.aes = list(shape = 1, alpha = 1, size = 4), title = "Group", title.hjust = 0.5))+
+  labs(x = "year", y ="Number of events", title= "Number of terrorist event by perpetrators groups") 
+```
+
+### 2. Claim modes
+Beside most of the claims are not documented or Unknown. On the following three positions are Personal claim, Posted to social media (Blog, website..) and Call (post-incident).
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+terrorist_data %>% dplyr::filter(claimmode_txt != "" & claimmode_txt != "Unknown") %>% dplyr::group_by(claimmode_txt) %>% 
+  dplyr::summarise(Count = n())-> dfa_31
+dfa_31$claimmode_txt1 <- reorder(dfa_31$claimmode_txt, desc(dfa_31$Count))
+```
+
+```{r, echo=TRUE, message=FALSE, warning=FALSE}
+ggplot(dfa_31, aes(x = claimmode_txt1, y = Count,fill = claimmode_txt))+
+  geom_bar(stat = 'identity', color = 'black')+
+  theme_bw() +
+  labs(title = 'Claim Mode by Terrorist groups', x = 'Mode', y = 'Number of events') +
+  geom_text(aes(label = Count),color = 'black', size = 3, position = position_dodge(0.5), vjust = 1)+
+  theme(legend.position = "none", axis.text.x = element_text(angle =90))
+```
+
+
+## X. Conclusion
+- Terrorist attack is more serious in recent years, we witness the increasing in term of number of events as well as number of human damage. <br>
+- Middle East & North Africa and South Asia and Sub-Saharan Africa are the most dangerous regions. <br>
+- The Explosion, Armed assaults are type of attacks is used most frequently while the perpetrators group in recent year target most regularly into Private property and Military facilities for terrorist attacks. <br>
+- ISIL, Al-Shabaab, Boko Haram take responsible for most terrorist events in recent years. <br>
+- Most of the claims are not documented or Unknown then Personal claim, Posted to social media (Blog, website..) and Call (post-incident) are most frequent claim modes of terrorist organization. <br>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
